@@ -346,7 +346,7 @@ module Seek
     end
 
     def project_settings_dictionary
-      @settings_dictionary ||= read_project_setting_attributes
+      @project_settings_dictionary ||= read_project_setting_attributes
     end
   end
 
