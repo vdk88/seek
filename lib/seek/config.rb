@@ -325,44 +325,28 @@ module Seek
       result
     end
 
-    def register_setting(key, options = {})
-      options ||= {}
-      setter = "#{key}="
-      getter = key.to_s
-      propagate = "#{getter}_propagate"
-      fallback = "#{getter}_fallback"
-      default = "default_#{key}"
-      symbol = key.to_sym
-      if respond_to?(fallback)
-        define_class_method getter do
-          get_value(symbol, options[:convert]) || send(fallback)
-        end
-      else
-        define_class_method getter do
-          get_value(symbol, options[:convert])
-        end
-      end
-
-      define_class_method default do
-        get_default_value(symbol, options[:convert])
-      end
-
-      define_class_method setter do |val|
-        set_value(symbol, val, options[:convert])
-        send propagate if respond_to?(propagate)
-      end
-    end
-
-    def register_encrypted_setting(key)
-      encrypted_settings << key.to_sym
-    end
-
-    def encrypted_settings
-      @encrypted_settings ||= []
-    end
-
     def encrypted_setting?(key)
-      encrypted_settings.include?(key.to_sym)
+      result = settings_dictionary[key.to_sym] || project_settings_dictionary[key.to_sym]
+      result && result[:encrypt]
+    end
+
+    # reads the available attributes from config_setting_attributes.yml
+    def read_setting_attributes
+      yaml = YAML.load_file(File.join(File.dirname(File.expand_path(__FILE__)), 'config_setting_attributes.yml'))
+      HashWithIndifferentAccess.new(yaml)
+    end
+
+    def read_project_setting_attributes
+      yaml = YAML.load_file(File.join(File.dirname(File.expand_path(__FILE__)), 'project_setting_attributes.yml'))
+      HashWithIndifferentAccess.new(yaml)
+    end
+
+    def settings_dictionary
+      @settings_dictionary ||= read_setting_attributes
+    end
+
+    def project_settings_dictionary
+      @settings_dictionary ||= read_project_setting_attributes
     end
   end
 
@@ -378,24 +362,46 @@ module Seek
     PERMISSION_POPUP_ON_CHANGE = 1
     PERMISSION_POPUP_NEVER = 2
 
-    # reads the available attributes from config_setting_attributes.yml
-    def self.read_setting_attributes
-      yaml = YAML.load_file(File.join(File.dirname(File.expand_path(__FILE__)), 'config_setting_attributes.yml'))
-      HashWithIndifferentAccess.new(yaml)
+    def self.respond_to_missing?(method_name, *args)
+      name = method_name.to_s
+      key = name.chomp('=').to_sym
+      if settings_dictionary.key?(key)
+        true
+      elsif name.start_with?('default_')
+        settings_dictionary.key?(name[8..-1].to_sym)
+      else
+        super
+      end
     end
 
-    def self.read_project_setting_attributes
-      yaml = YAML.load_file(File.join(File.dirname(File.expand_path(__FILE__)), 'project_setting_attributes.yml'))
-      HashWithIndifferentAccess.new(yaml)
-    end
-
-    read_setting_attributes.each do |method, opts|
-      register_setting(method, opts)
-      register_encrypted_setting(method) if opts && opts[:encrypt]
-    end
-
-    read_project_setting_attributes.each do |method, opts|
-      register_encrypted_setting(method) if opts && opts[:encrypt]
+    def self.method_missing(method_name, *args, &block)
+      name = method_name.to_s
+      is_setter = name.end_with?('=')
+      key = name.chomp('=').to_sym
+      if settings_dictionary.key?(key)
+        options = settings_dictionary[key] || {}
+        if is_setter
+          set_value(key, *args, options[:convert])
+          send("#{key}_propagate") if respond_to?("#{key}_propagate")
+        else
+          value = get_value(key, options[:convert])
+          if !value && respond_to?("#{key}_fallback")
+            send("#{key}_fallback")
+          else
+            value
+          end
+        end
+      else
+        if name.start_with?('default_') && !is_setter
+          key = name[8..-1].to_sym
+          if settings_dictionary.key?(key)
+            options = settings_dictionary[key] || {}
+            get_default_value(key, options[:convert])
+          end
+        else
+          super
+        end
+      end
     end
   end
 end
