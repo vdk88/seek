@@ -25,8 +25,6 @@ require 'pry'
 
 Minitest::Reporters.use! [Minitest::Reporters::DefaultReporter.new]
 
-Minitest::Test.i_suck_and_my_tests_are_order_dependent!
-
 FactoryGirl.find_definitions # It looks like requiring factory_girl _should_ do this automatically, but it doesn't seem to work
 
 Kernel.class_eval do
@@ -67,8 +65,24 @@ Kernel.class_eval do
 end
 
 class ActiveSupport::TestCase
-  setup :clear_rails_cache, :create_initial_person
-  teardown :clear_current_user
+  setup :clear_rails_cache, :create_initial_person, :log_settings
+  teardown :clear_current_user, :print_settings_on_fail
+
+  def log_settings
+    @settings = Settings.all.to_a
+  end
+
+  def print_settings_on_fail
+    return if passed? || skipped?
+    puts
+    puts "====================================="
+    puts self.to_s
+    puts
+    puts "# Settings:"
+    @settings.each { |s| puts "#{s.var}: #{s.value}" }
+    puts "====================================="
+    puts
+  end
 
   def file_for_upload
     fixture_file_upload('files/little_file_v2.txt', 'text/plain')

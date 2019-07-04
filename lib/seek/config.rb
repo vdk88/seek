@@ -332,22 +332,23 @@ module Seek
       propagate = "#{getter}_propagate"
       fallback = "#{getter}_fallback"
       default = "default_#{key}"
+      symbol = key.to_sym
       if respond_to?(fallback)
         define_class_method getter do
-          get_value(key, options[:convert]) || send(fallback)
+          get_value(symbol, options[:convert]) || send(fallback)
         end
       else
         define_class_method getter do
-          get_value(key, options[:convert])
+          get_value(symbol, options[:convert])
         end
       end
 
       define_class_method default do
-        get_default_value(key, options[:convert])
+        get_default_value(symbol, options[:convert])
       end
 
       define_class_method setter do |val|
-        set_value(key, val, options[:convert])
+        set_value(symbol, val, options[:convert])
         send propagate if respond_to?(propagate)
       end
     end
